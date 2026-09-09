@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://ruzoowzy.github.io/Mofaz-Movers-Company-Website/sitemap.xml
