@@ -7,33 +7,107 @@
    WHERE THE CONTACT FORM SENDS
    =====================================================================
 
-   Enquiries are delivered by FormSubmit (https://formsubmit.co) - a free,
-   unlimited form-to-email relay. There is no account, no dashboard and no
-   API key: the address below IS the configuration.
+   The destination is NOT set here. It is read at page load from
+   config.json in the site root, so changing where enquiries go is a
+   one-line edit to that file - no touching this script.
 
-   TO CHANGE THE DESTINATION ADDRESS
-   ---------------------------------
-   1. Put the new address in CONTACT_EMAIL below and save this file.
-   2. Send one test enquiry through the live contact page.
-   3. FormSubmit emails that new address a one-time confirmation link.
-      Open it and click Confirm. Enquiries start arriving from then on.
+   config.json holds two values:
 
-   Nothing else changes, and the old address simply stops receiving.
+     contactEmail      the address enquiries are delivered to
+     formsubmitAlias   optional. FormSubmit gives every confirmed address a
+                       random alias. If this is filled in, it is used
+                       INSTEAD of the address, so the real address never
+                       appears anywhere on the website.
 
-   HIDING THE ADDRESS FROM PUBLIC SOURCE (recommended once testing is done)
-   -----------------------------------------------------------------------
-   The address below is visible to anyone who reads this file, which over
-   time attracts spam. After confirming an address, FormSubmit shows you a
-   random alias for it that looks like "a1b2c3d4e5f6...". Put that alias in
-   CONTACT_EMAIL instead of the real address - it routes to exactly the same
-   inbox, but the address itself never appears on the website.
+   Whichever of the two is used becomes the FormSubmit endpoint:
+   https://formsubmit.co/ajax/<value>
+
+   A NOTE ON WHAT THIS DOES AND DOES NOT HIDE
+   ------------------------------------------
+   config.json is served publicly like every other file here - anyone can
+   open it in a browser. It makes the address easy to CHANGE; it does not
+   make it secret. The alias is what actually keeps the address away from
+   scrapers, because the alias is all the site ever carries.
    ===================================================================== */
 
-var CONTACT_EMAIL = 'Ruzo87@yahoo.com';
+var CONFIG_URL = 'config.json';
 
-/* The visible fallback address, used only in the message shown if sending
-   fails. Keep this a real, public company address. */
-var FALLBACK_EMAIL = 'info@mofazmovers.co.tz';
+/* The FormSubmit endpoint, read from the form's own action attribute in
+   contact.html (which carries "https://formsubmit.co/" and nothing more).
+   Keeping it in the markup means the relay the form posts to is visible
+   where the form is, while the address stays out of the page entirely. */
+var formsubmitBase = 'https://formsubmit.co/';
+
+/* The destination address. Deliberately EMPTY until config.json has been
+   read - no address is written into this file or into contact.html, so
+   config.json is the single place the destination is defined. */
+var formTarget = '';
+
+/* Resolves once the config request has finished, whether it succeeded or
+   not. The submit handler waits on it, so an enquiry sent in the first
+   moment after load still goes to the configured destination. */
+var configReady = null;
+
+/* ---------------------------------------------------------------------
+   Read config.json and point the form at whatever it names.
+   Runs only on the page that actually has the form.
+   --------------------------------------------------------------------- */
+function applyContactTarget(target, source) {
+    formTarget = target;
+    var form = document.getElementById('enquiryForm');
+    if (form && target) {
+        form.setAttribute('action', formsubmitBase + target);
+        form.setAttribute('data-target-source', source);
+    }
+}
+
+function loadContactConfig() {
+    var form = document.getElementById('enquiryForm');
+    if (!form) { return; }
+
+    /* Read the bare endpoint once, before anything appends to it. */
+    var declared = (form.getAttribute('action') || '').trim();
+    if (declared) {
+        formsubmitBase = declared.charAt(declared.length - 1) === '/' ? declared : declared + '/';
+    }
+
+    if (!window.fetch) {
+        configReady = { then: function (fn) { fn(); return this; } };
+        return;
+    }
+
+    configReady = fetch(CONFIG_URL, { cache: 'no-cache' })
+        .then(function (response) {
+            if (!response.ok) { throw new Error(CONFIG_URL + ' returned ' + response.status); }
+            return response.json();
+        })
+        .then(function (config) {
+            var alias = String(config.formsubmitAlias || '').trim();
+            var email = String(config.contactEmail || '').trim();
+
+            if (alias) {
+                applyContactTarget(alias, 'alias from config.json');
+            } else if (email) {
+                applyContactTarget(email, 'address from config.json');
+            }
+        })
+        .catch(function (err) {
+            /* formTarget stays empty; the form says so rather than
+               pretending to send. */
+            if (window.console && window.console.error) {
+                window.console.error('Could not read ' + CONFIG_URL +
+                    ' - the contact form has no destination.', err);
+            }
+        });
+}
+
+/* The public address shown on the page itself, used only in the message
+   offered when sending fails. Read from the page so it can never drift
+   out of step with what visitors can see. */
+function pageFallbackEmail() {
+    var link = document.querySelector('#main a[href^="mailto:"]');
+    return link ? link.getAttribute('href').replace('mailto:', '').split('?')[0] : '';
+}
 
 /* ---------------------------------------------------------------------
    Safety net.
@@ -102,22 +176,50 @@ function showEverything() {
             if (e.key === 'Escape' && !$nav.hasClass('hidden')) { closeNav(); }
         });
 
-        /* ---------- Reveal on scroll -------------------------------- */
+        /* ---------- Reveal on scroll --------------------------------
+           A plain scroll check rather than IntersectionObserver. The
+           observer needed a visible-fraction threshold, and a block taller
+           than the viewport - or one whose position shifted while images
+           were still loading - could fall under it and never be revealed,
+           leaving a section blank. Comparing positions on every scroll has
+           no such edge case: anything at or above the trigger line is
+           shown, and it is re-checked as the page settles. */
         var $reveal = $('.reveal');
-        if ('IntersectionObserver' in window && $reveal.length) {
-            var io = new IntersectionObserver(function (entries) {
-                entries.forEach(function (entry) {
-                    if (!entry.isIntersecting) { return; }
-                    var el = entry.target;
+
+        function showReveals() {
+            if (!$reveal.length) { return; }
+            var line = window.innerHeight * 0.92;
+            var remaining = [];
+            $reveal.each(function () {
+                var el = this;
+                if (el.classList.contains('is-visible')) { return; }
+                if (el.getBoundingClientRect().top <= line) {
                     var delay = parseInt(el.getAttribute('data-delay') || '0', 10);
                     window.setTimeout(function () { el.classList.add('is-visible'); }, delay);
-                    io.unobserve(el);
-                });
-            }, { rootMargin: '0px 0px -12% 0px', threshold: 0.08 });
-            $reveal.each(function () { io.observe(this); });
-        } else {
-            $reveal.addClass('is-visible').css({ opacity: 1, transform: 'none' });
+                } else {
+                    remaining.push(el);
+                }
+            });
+            $reveal = $(remaining);
         }
+
+        var revealPending = false;
+        function queueReveals() {
+            if (revealPending) { return; }
+            revealPending = true;
+            window.requestAnimationFrame(function () {
+                revealPending = false;
+                showReveals();
+            });
+        }
+
+        showReveals();
+        $(window).on('scroll resize', queueReveals);
+
+        /* Images finishing later can move things up into view. */
+        $(window).on('load', showReveals);
+        window.setTimeout(showReveals, 400);
+        window.setTimeout(showReveals, 1500);
 
         /* ---------- Count-up figures -------------------------------- */
         function countUp($el) {
@@ -150,6 +252,9 @@ function showEverything() {
         /* ---------- Contact form ------------------------------------ */
         var $form = $('#enquiryForm');
 
+        /* Read config.json and point the form wherever it says. */
+        loadContactConfig();
+
         function showError(name, show) {
             $('[data-error-for="' + name + '"]').toggleClass('hidden', !show);
             $('#' + name).toggleClass('input-validation-error', show);
@@ -160,6 +265,7 @@ function showEverything() {
             var checks = {
                 fullName: function (v) { return v.length > 1; },
                 email:    function (v) { return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v); },
+                phone:    function (v) { return (v.replace(/\D/g, '')).length >= 7; },
                 service:  function (v) { return v !== ''; },
                 message:  function (v) { return v.length >= 10; }
             };
@@ -196,6 +302,9 @@ function showEverything() {
             var $btn = $form.find('[type=submit]');
             $btn.prop('disabled', true).addClass('opacity-70').find('[data-btn-label]').text('Sending...');
 
+            /* These three are siblings on purpose: send() and
+               offerFallback() both call finish() and announce(), so they
+               must live in the same scope. */
             function finish() {
                 $btn.prop('disabled', false).removeClass('opacity-70').find('[data-btn-label]').text('Send enquiry');
             }
@@ -214,13 +323,31 @@ function showEverything() {
                 $('html, body').animate({ scrollTop: $box.offset().top - 120 }, 400);
             }
 
+            /* config.json may still be in flight on a very fast submit. */
+            if (configReady && configReady.then) {
+                configReady.then(send, send);
+            } else {
+                send();
+            }
+
+            function send() {
+
+            /* No destination means config.json could not be read. Say so
+               honestly and offer the email and phone instead - never
+               swallow an enquiry. */
+            if (!formTarget) {
+                finish();
+                offerFallback('We could not send that automatically.');
+                return;
+            }
+
             /* FormSubmit's AJAX endpoint. The underscore fields are its own
                options: _subject sets the email subject line, _template picks
                the layout, _captcha off because we validate here, and
                _honey is its built-in spam trap (bots fill it, people cannot
                see it). Everything else becomes a row in the email. */
             $.ajax({
-                url: 'https://formsubmit.co/ajax/' + CONTACT_EMAIL,
+                url: formsubmitBase + 'ajax/' + formTarget,
                 method: 'POST',
                 dataType: 'json',
                 contentType: 'application/json',
@@ -232,7 +359,7 @@ function showEverything() {
                     Name:      data.name,
                     Company:   data.company || '-',
                     Email:     data.email,
-                    Phone:     data.phone || '-',
+                    Phone:     data.phone,
                     Service:   data.service,
                     Message:   data.message
                 })
@@ -246,27 +373,41 @@ function showEverything() {
                          true);
             }).fail(function () {
                 finish();
+                offerFallback('We could not send that automatically.');
+            });
+            }   /* end send() */
+
+            function offerFallback(headline) {
                 var subject = 'Website enquiry - ' + data.service + ' - ' + data.name;
                 var body = [
                     'Name:    ' + data.name,
                     'Company: ' + (data.company || '-'),
                     'Email:   ' + data.email,
-                    'Phone:   ' + (data.phone || '-'),
+                    'Phone:   ' + data.phone,
                     'Service: ' + data.service,
                     '',
                     'Cargo details',
                     '-------------',
                     data.message
                 ].join('\r\n');
-                var mailto = 'mailto:' + FALLBACK_EMAIL +
-                    '?subject=' + encodeURIComponent(subject) +
-                    '&body=' + encodeURIComponent(body);
-                announce('We could not send that automatically.',
-                         'Please <a href="' + mailto + '" class="font-semibold underline">send it by email instead</a> ' +
-                         '(your details are already filled in), or call ' +
-                         '<a href="tel:+255754262495" class="font-semibold underline">+255 754 262495</a>.',
-                         false);
-            });
+
+                var address = pageFallbackEmail();
+                var parts = [];
+                if (address) {
+                    parts.push('Please <a href="mailto:' + address +
+                        '?subject=' + encodeURIComponent(subject) +
+                        '&body=' + encodeURIComponent(body) +
+                        '" class="font-semibold underline">send it by email instead</a> ' +
+                        'with your details already filled in');
+                }
+                var tel = $('a[href^="tel:"]').first().attr('href');
+                if (tel) {
+                    parts.push((parts.length ? ', or call ' : 'Please call ') +
+                        '<a href="' + tel + '" class="font-semibold underline">' +
+                        $('a[href^="tel:"]').first().text().trim() + '</a>');
+                }
+                announce(headline, parts.join('') + '.', false);
+            }
         });
 
         /* ---------- Which menu item is "current" --------------------

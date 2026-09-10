@@ -325,7 +325,18 @@
             </div>
           </div>
 
-          <form id="enquiryForm" class="mt-8 space-y-5" novalidate>
+          <noscript>
+            <div class="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">
+              This form needs JavaScript to send. With it switched off, please email
+              <a href="mailto:info@mofazmovers.co.tz" class="font-semibold underline">info@mofazmovers.co.tz</a>
+              or call <a href="tel:+255754262495" class="font-semibold underline">+255 754 262495</a> instead.
+            </div>
+          </noscript>
+
+          <!-- The form posts to FormSubmit. The destination address is deliberately
+                 NOT here - js/site.js appends it from config.json on load. -->
+          <form id="enquiryForm" class="mt-8 space-y-5"
+                method="post" action="https://formsubmit.co/" novalidate>
 
             <div class="grid gap-5 sm:grid-cols-2">
               <div>
@@ -347,7 +358,8 @@
               </div>
               <div>
                 <label for="phone" class="field-label">Phone / WhatsApp</label>
-                <input type="tel" id="phone" name="phone" class="field" placeholder="+255 &hellip;" autocomplete="tel" inputmode="tel">
+                <input type="tel" id="phone" name="phone" class="field" placeholder="+255 &hellip;" autocomplete="tel" inputmode="tel" required>
+                <span class="field-error hidden" data-error-for="phone">Please give us a phone number &ndash; it is the fastest way to reach you about cargo.</span>
               </div>
             </div>
 
@@ -376,7 +388,7 @@
                  If it comes back with a value, the enquiry is discarded. -->
             <div class="hidden" aria-hidden="true">
               <label for="website">Leave this field empty</label>
-              <input type="text" id="website" name="website" tabindex="-1" autocomplete="off">
+              <input type="text" id="website" name="_honey" tabindex="-1" autocomplete="off">
             </div>
 
             <div class="flex flex-wrap items-center gap-4 pt-2">
@@ -497,7 +509,14 @@
     </div>
 
     <div class="mt-14 flex flex-col gap-4 border-t border-white/10 pt-8 text-xs sm:flex-row sm:items-center sm:justify-between">
-      <p>&copy; <span data-year>2026</span> Mofaz Movers Logistic Co Ltd. All rights reserved.</p>
+      <div class="space-y-1">
+        <p>&copy; <span data-year>2026</span> Mofaz Movers Logistic Co Ltd. All rights reserved.</p>
+        <p class="text-white/50">
+          Developed by
+          <a href="https://viramol.co.tz" target="_blank" rel="noopener"
+             class="font-medium text-white/70 underline-offset-2 transition hover:text-cargo-300 hover:underline">Viramol Solutions Ltd</a>
+        </p>
+      </div>
       <p class="uppercase tracking-[.2em] text-white/40">Power Beyond Cargo</p>
     </div>
   </div>

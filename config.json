@@ -1,0 +1,11 @@
+{
+  "_readme": "Where the contact form delivers. Edit this file, commit, push - nothing else needs changing. Full instructions are in the maintenance guide, section 5.",
+
+  "contactEmail": "Ruzom27@gmail.com",
+
+  "_contactEmail_help": "The address enquiries are sent to. The first enquiry to any new address triggers a one-time confirmation email from FormSubmit - open it and click Confirm, or nothing will be delivered.",
+
+  "formsubmitAlias": "",
+
+  "_formsubmitAlias_help": "Optional. Once FormSubmit has confirmed the address above, it offers a random alias for it that looks like 'a1b2c3d4e5f6g7h8'. Paste that alias here and the site uses it INSTEAD of the address, so the real address never appears anywhere on the website. Leave this empty to use contactEmail directly."
+}
